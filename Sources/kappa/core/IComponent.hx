@@ -21,7 +21,7 @@ package kappa.core;
  * 
  * **@:require**  
  * You can also add component dependencies using `@:require(<Components...>)` on the class.
- * When the component is added, it's dependencies are 
+ * When the component is added, it's dependencies are auto-added if not added yet.
  * 
  * **Example**  
  * ```

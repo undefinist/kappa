@@ -313,14 +313,20 @@ class World
             });
         }
 
+        var id = kappa.macro.ComponentMacro.getType(cls);
         // enforce code hinting using (expr : type) check
         return macro
         { ( {
             $b{ addDepsExprs };
-            var comp = ((cast $world.__addOfType($e, $v{kappa.macro.ComponentMacro.getType(cls)}, $cls)) : $ctype);
-            comp.init($a{args});
-            $world.__addOfTypeSignalFire($e, comp);
-            comp; // return value of block
+            if(!$world.__hasOfType($e, $v{id}))
+            {
+                var comp = ((cast $world.__addOfType($e, $v{id}, $cls)) : $ctype);
+                comp.init($a{args});
+                $world.__addOfTypeSignalFire($e, comp);
+                comp; // return value of block
+            }
+            else
+                cast $world.__getOfType($e, $v{id});
         } : $ctype); };
     }
 

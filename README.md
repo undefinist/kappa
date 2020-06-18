@@ -30,7 +30,7 @@ This means you can write a _pure_ component where you only define fields and def
 
 ### @:require
 You can also add component dependencies using `@:require(<Components...>)` on the class.
-When the component is added, it's dependencies are 
+When the component is added, it's dependencies are auto-added if not added yet.
 
 ### Example
 ```haxe
