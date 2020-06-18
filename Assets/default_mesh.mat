@@ -1,0 +1,9 @@
+{
+    "vertexShader": "mesh_vert",
+    "fragmentShader": "pbr_forward_frag",
+    "depthWrite": true,
+    "cullMode": "Clockwise",
+    "parameters": {
+        "test": { "type": "float", "value": 1 }
+    }
+}

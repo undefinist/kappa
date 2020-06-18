@@ -4,6 +4,3 @@
 [submodule "Libraries/haxebullet"]
 	path = Libraries/haxebullet
 	url = https://github.com/armory3d/haxebullet.git
-[submodule "Libraries/iron_format"]
-	path = Libraries/iron_format
-	url = https://github.com/armory3d/iron_format.git

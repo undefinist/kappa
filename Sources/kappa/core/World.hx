@@ -1,11 +1,11 @@
 package kappa.core;
 
-import kappa.util.Signal;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.ExprTools;
 import haxe.macro.TypeTools;
+import haxe.macro.Type.ClassType;
 import kappa.macro.ComponentMacro;
 #else
 import kha.Scheduler;
@@ -13,6 +13,7 @@ import kappa.core.IComponent;
 import kappa.core.ComponentPool;
 import kappa.core.Entity;
 import kappa.core.System;
+import kappa.util.Signal;
 #end
 
 class World 
@@ -39,12 +40,12 @@ class World
     /**
      * Signal that fires when a component is added to an entity. Called after component's `.init`.
      */
-    public var onComponentAdded(default, null):Signal<IComponent->Void>;
+    public var onComponentAdded(default, null):Signal<Entity->IComponent->Void>;
     
     /**
      * Signal that fires when a component is removed.
      */
-    public var onComponentRemoved(default, null):Signal<IComponent->Void>;
+    public var onComponentRemoved(default, null):Signal<Entity->IComponent->Void>;
 
     public function new() 
     {
@@ -63,8 +64,8 @@ class World
         _updatePasses = [];
         _renderPasses = [];
 
-        onComponentAdded = new Signal<IComponent->Void>();
-        onComponentRemoved = new Signal<IComponent->Void>();
+        onComponentAdded = new Signal<Entity->IComponent->Void>();
+        onComponentRemoved = new Signal<Entity->IComponent->Void>();
     }
 
     public function init()
@@ -137,7 +138,7 @@ class World
             {
                 var c = pool.get(e.index);
                 pool.remove(e.index);
-                onComponentRemoved.fire(c);
+                onComponentRemoved.fire(e, c);
             }
         }
 
@@ -204,15 +205,15 @@ class World
     }
 
     @:noCompletion @:noDoc // internal
-    public function __addOfTypeSignalFire(c:IComponent)
+    public function __addOfTypeSignalFire(e:Entity, c:IComponent)
     {
-        onComponentAdded.fire(c);
+        onComponentAdded.fire(e, c);
     }
 
     @:noCompletion @:noDoc // internal
     public function __removeOfType(e:Entity, ctype:ComponentType)
     {
-        onComponentRemoved.fire(_components[ctype].remove(e.index));
+        onComponentRemoved.fire(e, _components[ctype].remove(e.index));
     }
 
     @:noCompletion @:noDoc // internal
@@ -221,10 +222,37 @@ class World
         return _components[ctype].get(e.index);
     }
 
+    @:noCompletion @:noDoc // internal
+    inline public function __hasOfType(e:Entity, ctype:ComponentType):Bool
+    {
+        return _components[ctype].has(e.index);
+    }
+
     #end // #if !macro
+
+    #if macro 
+
+    private static function buildDependencies(klass:ClassType, deps:Array<Expr>)
+    {
+        if(klass.meta.has(":require"))
+        {
+            for(m in klass.meta.extract(":require"))
+            {
+                for(p in m.params)
+                {
+                    var type = Context.getType(ExprTools.toString(p));
+                    buildDependencies(TypeTools.getClass(type), deps);
+                    deps.push(p);
+                }
+            }
+        }
+    }
+
+    #end
     
     /**
      * Add a component to entity `e`. The component must have an arg-less constructor.  
+     * If the given component has component dependencies via `@:require(<Components...>)`, adds the dependencies FIRST if needed.
      * Usage: `world.add(e, Component, <init-fn args...>)`
      * @param e The entity
      * @param cls The component class
@@ -234,9 +262,10 @@ class World
     {
         var type = Context.getType(ExprTools.toString(cls));
         var ctype = Context.toComplexType(type);
+        var klass = TypeTools.getClass(type);
         if(!TypeTools.unify(type, Context.getType("kappa.core.IComponent")))
             Context.fatalError("World#add argument 2 must be a IComponent class", cls.pos);
-        switch(TypeTools.getClass(type).constructor.get().type)
+        switch(klass.constructor.get().type)
         {
             case TLazy(f):
                 switch(f())
@@ -253,12 +282,45 @@ class World
             default:
                 throw "unreachable";
         }
-        // enforce code hinting using : type check
-        return macro { ({
+        
+        var deps:Array<Expr> = [];
+        buildDependencies(klass, deps);
+        
+        // remove duplicate deps
+        for(i in 0...deps.length - 1)
+        {
+            for(j in i + 1...deps.length)
+            {
+                if(deps[i].expr.equals(deps[j].expr))
+                    deps[j] = null;
+            }
+        }
+        deps = deps.filter(expr -> expr != null);
+
+        var addDepsExprs:Array<Expr> = [];
+        for(expr in deps)
+        {
+            var ctype = Context.toComplexType(Context.getType(ExprTools.toString(expr)));
+            var id = kappa.macro.ComponentMacro.getType(expr);
+            addDepsExprs.push(macro
+            {
+                if(!$world.__hasOfType($e, $v{id}))
+                {
+                    var comp = ((cast $world.__addOfType($e, $v{id}, $expr)) : $ctype);
+                    comp.init();
+                    $world.__addOfTypeSignalFire($e, comp);
+                }
+            });
+        }
+
+        // enforce code hinting using (expr : type) check
+        return macro
+        { ( {
+            $b{ addDepsExprs };
             var comp = ((cast $world.__addOfType($e, $v{kappa.macro.ComponentMacro.getType(cls)}, $cls)) : $ctype);
             comp.init($a{args});
-            $world.__addOfTypeSignalFire(comp);
-            comp;
+            $world.__addOfTypeSignalFire($e, comp);
+            comp; // return value of block
         } : $ctype); };
     }
 

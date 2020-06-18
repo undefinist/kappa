@@ -35,7 +35,7 @@ class ComponentPool
         _data = [];
     }
 
-    public function add<T:IComponent>(index:EntityIndex, IComponent:T):T
+    public function add<T:IComponent>(index:EntityIndex, component:T):T
     {
         var len = _packed.push(index);
         while(index >= _sparse.length)
@@ -43,7 +43,7 @@ class ComponentPool
         _sparse[index] = len - 1;
         if(_data.length == len) // `_data` cannot be shorter than `_packed`, as it is never trimmed.
             _data.push(null);
-        return cast _data[len - 1] = IComponent;
+        return cast _data[len - 1] = component;
     }
 
     public function recycle(index:EntityIndex):IComponent
@@ -77,7 +77,7 @@ class ComponentPool
 
     public function has(index:EntityIndex):Bool
     {
-        return index < size && _sparse[index] != _INVALID_INDEX;
+        return index < _sparse.length && _sparse[index] != _INVALID_INDEX;
     }
 
     public function get(index:EntityIndex):IComponent
@@ -89,11 +89,16 @@ class ComponentPool
     {
         return new PoolIterator(this);
     }
+
+    public function entities():Iterator<EntityIndex>
+    {
+        return _packed.iterator();
+    }
 }
 
 typedef PoolElement = { 
     index:EntityIndex,
-    IComponent:IComponent 
+    component:IComponent 
 };
 
 class PoolIterator
@@ -114,7 +119,7 @@ class PoolIterator
 
     public function next():PoolElement
     {
-        var ret = { index: _pool._sparse[_pool._packed[_packedIndex]], IComponent: _pool._data[_packedIndex] };
+        var ret = { index: _pool._packed[_packedIndex], component: _pool._data[_packedIndex] };
         ++_packedIndex;
         return ret;
     }

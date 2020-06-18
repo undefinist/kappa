@@ -9,10 +9,10 @@ import kappa.math.Mat4;
 @:structInit
 class Quat
 {
-    var x:FastFloat = 0;
-    var y:FastFloat = 0;
-    var z:FastFloat = 0;
-    var w:FastFloat = 1;
+    public var x:FastFloat = 0;
+    public var y:FastFloat = 0;
+    public var z:FastFloat = 0;
+    public var w:FastFloat = 1;
 
     inline public function new(x:FastFloat = 0, y:FastFloat = 0, z:FastFloat = 0, w:FastFloat = 1)
     {
@@ -151,10 +151,10 @@ class Quat
     public inline function mul(r:Quat):Quat
     {
         return new Quat(
-            w * r.w - x * r.x - y * r.y - z * r.z,
-		    w * r.x + x * r.w + y * r.z - z * r.y,
-		    w * r.y - x * r.z + y * r.w + z * r.x,
-            w * r.z + x * r.y - y * r.x + z * r.w);
+			w * r.x + x * r.w + y * r.z - z * r.y,
+			w * r.y - x * r.z + y * r.w + z * r.x,
+			w * r.z + x * r.y - y * r.x + z * r.w,
+			w * r.w - x * r.x - y * r.y - z * r.z);
 	}
 	
     public inline function normalize():Quat

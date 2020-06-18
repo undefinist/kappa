@@ -34,7 +34,7 @@ class ViewMacro
         var reqTypes = filter.required;
         var excTypes = filter.excluded;
 
-        var className = "View_"; // View_{req}___{exc}
+        var className = "View"; // View_{req}___{exc}
         var inputFnArgs = [ { 
             name: "e",
             opt: false,
@@ -43,16 +43,16 @@ class ViewMacro
         for(t in reqTypes)
         {
             var tname = TypeTools.toString(t).replace(".", "_");
-            className += tname;
+            className += "_" + tname;
             inputFnArgs.push({ 
                 name: tname,
                 opt: false,
                 t: t
             });
         }
-        if(excTypes.length > 0) className += "___";
+        if(excTypes.length > 0) className += "__";
         for(t in excTypes)
-            className += TypeTools.toString(t).replace(".", "_");
+            className += "_" + TypeTools.toString(t).replace(".", "_");
 
         try
         {
@@ -63,6 +63,7 @@ class ViewMacro
         }
 
         var inputFnType = Context.toComplexType(Type.TFun(inputFnArgs, ComplexTypeTools.toType(macro:Void)));
+        var findFnType = Context.toComplexType(Type.TFun(inputFnArgs, ComplexTypeTools.toType(macro:Bool)));
 
         var required = [ for(t in reqTypes)
             kappa.macro.ComponentMacro.COMPONENT_NAMES.indexOf(MacroTools.getClassName(TypeTools.getClass(t))) ];
@@ -74,32 +75,25 @@ class ViewMacro
         
         // fn(entity, arr[0], arr[1], ..., arr[n - 1]);
         var fnCallArgs = ExprArrayTools.map(reqIndexExprs, (expr:Expr) -> return macro cast arr[$expr]);
-        fnCallArgs.insert(0, macro _world._entities[elem.index]);
-        var fnCall = macro fn($a{fnCallArgs});
+        fnCallArgs.insert(0, macro _world._entities[e]); // e == entity index
 
         // if((arr[i] = _world._components[required[i]].get(entityindex)) == null) continue;
         var fillArgAndCheck = ExprArrayTools.map(reqExprs,
-            (expr:Expr) -> return macro _world._components[$expr].get(elem.index));
+            (expr:Expr) -> return macro _world._components[$expr].get(e));
         for(i in 0...fillArgAndCheck.length)
             fillArgAndCheck[i] = macro if((arr[$v{i}] = ${fillArgAndCheck[i]}) == null) continue;
 
         // skip entities with excluded components
-        for(i in excluded) fillArgAndCheck.push(macro if(_world._components[$v{i}].has(elem.index)) continue);
-        
-        var c:TypeDefinition;
-        if(reqTypes.length > 0)
+        for(i in excluded) fillArgAndCheck.push(macro if(_world._components[$v{i}].has(e)) continue);
+
+        function generateIteration(innerExpr:Expr, ?endExpr:Expr):Expr
         {
-            c = macro class $className
+            if(endExpr == null)
+                endExpr = macro {};
+
+            if(reqTypes.length > 0)
             {
-                var _world:kappa.core.World;
-
-                public function new(world:kappa.core.World)
-                {
-                    _world = world;
-                }
-
-                @:access(kappa.core.World)
-                public function forEach(fn:$inputFnType)
+                return macro
                 {
                     var shortestPool = $v{required[0]};
                     for(i in $v{required})
@@ -109,42 +103,68 @@ class ViewMacro
                     }
 
                     var arr:Array<kappa.core.IComponent> = $v{ [ for(i in required) null ] };
-                    for(elem in _world._components[shortestPool])
+                    for(e in _world._components[shortestPool].entities())
                     {
                         $b{fillArgAndCheck};
-                        $fnCall;
+                        $innerExpr;
                     }
-                }
-            };
-        }
-        else 
-        {
-            c = macro class $className
+
+                    $endExpr;
+                };
+            }
+            else
             {
-                var _world:kappa.core.World;
-
-                inline public function new(world:kappa.core.World)
+                return macro
                 {
-                    _world = world;
-                }
-
-                /**
-                 * Iterates all entities in this view, calling `fn`.
-                 */
-                @:access(kappa.core.World)
-                inline public function forEach(fn:$inputFnType)
-                {
-                    for(i in 0..._world._entities.length)
+                    for(e in 0..._world._entities.length)
                     {
-                        if(_world._entities[i].index == i)
+                        if(_world._entities[e].index == e)
                         {
                             $b{fillArgAndCheck};
-                            fn(_world._entities[i]);
+                            $innerExpr;
                         }
                     }
-                }
-            };
+
+                    $endExpr;
+                };
+            }
         }
+        
+        var c = macro class $className
+        {
+            var _world:kappa.core.World;
+
+            public function new(world:kappa.core.World)
+            {
+                _world = world;
+            }
+
+            /**
+             * Iterates the view and calls function `f` for each entity.
+             * It is provided with the entity itself and all the required components.
+             */
+            @:access(kappa.core.World)
+            public function forEach(f:$inputFnType)
+            {
+                ${generateIteration(macro f($a{fnCallArgs}))}
+            }
+
+            /**
+             * Iterates the view and returns the first entity for which predicate `pred` returns true.
+             * It is provided with the entity itself and all the required components.
+             * 
+             * The function returns as soon as an entity is found.
+             * 
+             * If no entity is found, returns `Entity.INVALID`.
+             */
+            @:access(kappa.core.World)
+            public function find(pred:$findFnType)
+            {
+                ${generateIteration(
+                    macro if(pred($a{fnCallArgs})) return _world._entities[e],
+                    macro return kappa.core.Entity.INVALID)}
+            }
+        };
         
         Context.defineType(c);
         return Context.toComplexType(Context.getType(className));

@@ -3,6 +3,8 @@ let project = new Project('kappa');
 project.addSources('Sources');
 project.addShaders('Shaders/**');
 
+project.addLibrary("json2object");
+
 project.addLibrary("iron_format");
 project.addLibrary("haxebullet");
 

@@ -282,9 +282,7 @@ vec3 pbr_metallic(
 )
 {
 //Gamma uncorrection
-#ifndef VULKAN
 	albedo = pow(albedo, vec3(2.2f));
-#endif
 // temporary light code
 	
 	vec3  frag_to_light = (vec4(light.v_pos,1)).xyz - view_pos;
