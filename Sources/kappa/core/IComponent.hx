@@ -5,7 +5,8 @@ package kappa.core;
  * Components must have arg-less constructors or no constructors at all. (They will be auto-added)
  * 
  * **Default Init**  
- * All initialized fields are initialized in an auto-generated private function `__defaultInit()`.
+ * All initialized fields are initialized in an auto-generated private function `__defaultInit(args...)`.
+ * See example below.
  * 
  * **Init**  
  * You can also add an init function in the form: `public function init(args...)`  
